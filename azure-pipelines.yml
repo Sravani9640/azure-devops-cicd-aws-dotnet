@@ -1,0 +1,21 @@
+trigger:
+- main
+
+pool:
+  name: 'Default'   # Replace with your agent pool name if it's different
+
+steps:
+- checkout: self
+  displayName: 'Checkout Source Code'
+
+- task: UseDotNet@2
+  displayName: 'Use .NET SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '10.0.x'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restore NuGet Packages'
+  inputs:
+    command: 'restore'
+    projects: '**/*.slnx'
