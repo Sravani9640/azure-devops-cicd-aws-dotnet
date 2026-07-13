@@ -1,21 +1,40 @@
 trigger:
 - main
 
-pool:
-  name: 'Default'   # Replace with your agent pool name if it's different
+variables:
+- group: Production-Variables
 
-steps:
-- checkout: self
-  displayName: 'Checkout Source Code'
+stages:
 
-- task: UseDotNet@2
-  displayName: 'Use .NET SDK'
-  inputs:
-    packageType: 'sdk'
-    version: '10.0.x'
+- stage: Build
+  displayName: Build Stage
 
-- task: DotNetCoreCLI@2
-  displayName: 'Restore NuGet Packages'
-  inputs:
-    command: 'restore'
-    projects: '**/*.slnx'
+  jobs:
+
+  - job: BuildJob
+
+    pool:
+      name: Default
+
+    steps:
+
+    - checkout: self
+
+    - task: UseDotNet@2
+      displayName: Install .NET SDK
+      inputs:
+        packageType: sdk
+        version: $(DOTNET_VERSION)
+
+    - task: DotNetCoreCLI@2
+      displayName: Restore Packages
+      inputs:
+        command: restore
+        projects: '**/*.slnx'
+
+    - task: DotNetCoreCLI@2
+      displayName: Build Solution
+      inputs:
+        command: build
+        projects: '**/*.slnx'
+        arguments: '--configuration $(BUILD_CONFIGURATION) --no-restore'
