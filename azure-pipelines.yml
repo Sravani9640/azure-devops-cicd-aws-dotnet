@@ -66,11 +66,3 @@ stages:
         command: test
         projects: 'tests/**/*.csproj'
         arguments: '--configuration $(BUILD_CONFIGURATION) --no-build --logger trx'
-
-    - task: PublishTestResults@2
-      displayName: Publish Test Results
-      condition: succeededOrFailed()
-      inputs:
-        testResultsFormat: 'VSTest'
-        testResultsFiles: '**/*.trx'
-        failTaskOnFailedTests: true
