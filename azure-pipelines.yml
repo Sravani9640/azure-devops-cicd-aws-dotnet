@@ -38,3 +38,39 @@ stages:
         command: build
         projects: '**/*.slnx'
         arguments: '--configuration $(BUILD_CONFIGURATION) --no-restore'
+
+- stage: Test
+  displayName: Test Stage
+  dependsOn: Build
+
+  jobs:
+  - job: TestJob
+    displayName: Run Tests
+
+    pool:
+      name: Default
+
+    steps:
+
+    - checkout: self
+
+    - task: UseDotNet@2
+      displayName: Install .NET SDK
+      inputs:
+        packageType: sdk
+        version: $(DOTNET_VERSION)
+
+    - task: DotNetCoreCLI@2
+      displayName: Run Tests
+      inputs:
+        command: test
+        projects: 'tests/**/*.csproj'
+        arguments: '--configuration $(BUILD_CONFIGURATION) --no-build --logger trx'
+
+    - task: PublishTestResults@2
+      displayName: Publish Test Results
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: 'VSTest'
+        testResultsFiles: '**/*.trx'
+        failTaskOnFailedTests: true
