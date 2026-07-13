@@ -51,3 +51,20 @@ stages:
         projects: 'tests/Application.UnitTests/Application.UnitTests.csproj'
         publishTestResults: true
         arguments: '--configuration $(BUILD_CONFIGURATION)'
+    # Publish Web Application
+    - task: DotNetCoreCLI@2
+      displayName: "Publish Application"
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: 'src/Web/Web.csproj'
+        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(Build.ArtifactStagingDirectory)'
+        zipAfterPublish: true
+
+    # Publish Build Artifact
+    - task: PublishBuildArtifacts@1
+      displayName: "Publish Build Artifact"
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
