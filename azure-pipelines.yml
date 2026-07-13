@@ -6,63 +6,48 @@ variables:
 
 stages:
 
-- stage: Build
-  displayName: Build Stage
+- stage: CI
+  displayName: "Continuous Integration"
 
   jobs:
-
-  - job: BuildJob
+  - job: BuildAndTest
+    displayName: "Build and Test"
 
     pool:
       name: Default
 
     steps:
 
+    # Checkout source code
     - checkout: self
 
+    # Install .NET SDK
     - task: UseDotNet@2
-      displayName: Install .NET SDK
+      displayName: "Install .NET SDK"
       inputs:
-        packageType: sdk
-        version: $(DOTNET_VERSION)
+        packageType: 'sdk'
+        version: '$(DOTNET_VERSION)'
 
+    # Restore NuGet packages
     - task: DotNetCoreCLI@2
-      displayName: Restore Packages
+      displayName: "Restore Packages"
       inputs:
-        command: restore
+        command: 'restore'
         projects: '**/*.slnx'
 
+    # Build Solution
     - task: DotNetCoreCLI@2
-      displayName: Build Solution
+      displayName: "Build Solution"
       inputs:
-        command: build
+        command: 'build'
         projects: '**/*.slnx'
         arguments: '--configuration $(BUILD_CONFIGURATION) --no-restore'
 
-- stage: Test
-  displayName: Test Stage
-  dependsOn: Build
-
-  jobs:
-  - job: TestJob
-    displayName: Run Tests
-
-    pool:
-      name: Default
-
-    steps:
-
-    - checkout: self
-
-    - task: UseDotNet@2
-      displayName: Install .NET SDK
-      inputs:
-        packageType: sdk
-        version: $(DOTNET_VERSION)
-
+    # Run Unit Tests
     - task: DotNetCoreCLI@2
-      displayName: Run Tests
+      displayName: "Run Unit Tests"
       inputs:
-        command: test
-        projects: 'tests/**/*.csproj'
-        arguments: '--configuration $(BUILD_CONFIGURATION) --no-build --logger trx'
+        command: 'test'
+        projects: 'tests/Application.UnitTests/Application.UnitTests.csproj'
+        publishTestResults: true
+        arguments: '--configuration $(BUILD_CONFIGURATION)'
