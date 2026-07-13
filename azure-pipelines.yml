@@ -11,7 +11,7 @@ stages:
 
   jobs:
   - job: BuildAndTest
-    displayName: "Build and Test"
+    displayName: "Build, Test and Publish"
 
     pool:
       name: Default
@@ -28,40 +28,60 @@ stages:
         packageType: 'sdk'
         version: '$(DOTNET_VERSION)'
 
-    # Restore NuGet packages
+    # Install Node.js
+    - task: NodeTool@0
+      displayName: "Install Node.js"
+      inputs:
+        versionSpec: '20.x'
+
+    # Verify Node.js and npm
+    - script: |
+        echo ===== PATH =====
+        echo %PATH%
+
+        echo ===== NODE LOCATION =====
+        where node
+        where npm
+
+        echo ===== VERSIONS =====
+        node -v
+        npm -v
+      displayName: "Verify Node.js"
+
+    # Restore packages
     - task: DotNetCoreCLI@2
       displayName: "Restore Packages"
       inputs:
-        command: 'restore'
+        command: restore
         projects: '**/*.slnx'
 
-    # Build Solution
+    # Build solution
     - task: DotNetCoreCLI@2
       displayName: "Build Solution"
       inputs:
-        command: 'build'
+        command: build
         projects: '**/*.slnx'
         arguments: '--configuration $(BUILD_CONFIGURATION) --no-restore'
 
-    # Run Unit Tests
+    # Run tests
     - task: DotNetCoreCLI@2
       displayName: "Run Unit Tests"
       inputs:
-        command: 'test'
+        command: test
         projects: 'tests/Application.UnitTests/Application.UnitTests.csproj'
         publishTestResults: true
         arguments: '--configuration $(BUILD_CONFIGURATION)'
-    # Publish Web Application
+
+    # Publish application
     - task: DotNetCoreCLI@2
       displayName: "Publish Application"
       inputs:
-        command: 'publish'
+        command: publish
         publishWebProjects: false
         projects: 'src/Web/Web.csproj'
         arguments: '--configuration $(BUILD_CONFIGURATION) --output $(Build.ArtifactStagingDirectory)'
-        zipAfterPublish: true
 
-    # Publish Build Artifact
+    # Publish build artifact
     - task: PublishBuildArtifacts@1
       displayName: "Publish Build Artifact"
       inputs:
