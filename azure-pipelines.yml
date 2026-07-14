@@ -74,13 +74,17 @@ stages:
 
     # Publish application
     - task: DotNetCoreCLI@2
-      displayName: "Publish Application"
+      displayName: "Publish Linux Self-Contained Application"
       inputs:
         command: publish
         publishWebProjects: false
         projects: 'src/Web/Web.csproj'
-        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(Build.ArtifactStagingDirectory)'
-
+        arguments: >
+          --configuration $(BUILD_CONFIGURATION)
+          --runtime linux-x64
+          --self-contained true
+          --output $(Build.ArtifactStagingDirectory)
+        
     # Publish build artifact
     - task: PublishBuildArtifacts@1
       displayName: "Publish Build Artifact"
