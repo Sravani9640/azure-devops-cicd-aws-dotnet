@@ -29,24 +29,24 @@ stages:
         version: '$(DOTNET_VERSION)'
 
     # Install Node.js
-    - task: NodeTool@0
+    - task: UseNode@1
       displayName: "Install Node.js"
       inputs:
-        versionSpec: '20.x'
+       version: '20.x'
 
     # Verify Node.js and npm
-    - script: |
-        echo ===== PATH =====
-        echo %PATH%
+    #- script: |
+        #echo ===== PATH =====
+        #echo %PATH%
 
-        echo ===== NODE LOCATION =====
-        where node
-        where npm
+        #echo ===== NODE LOCATION =====
+        #where node
+        #where npm
 
-        echo ===== VERSIONS =====
-        node -v
-        npm -v
-      displayName: "Verify Node.js"
+        #echo ===== VERSIONS =====
+        #node -v
+        #npm -v
+      #displayName: "Verify Node.js"
 
     # Restore packages
     - task: DotNetCoreCLI@2
@@ -74,16 +74,12 @@ stages:
 
     # Publish application
     - task: DotNetCoreCLI@2
-      displayName: "Publish Linux Self-Contained Application"
+      displayName: "Publish Application"
       inputs:
         command: publish
         publishWebProjects: false
         projects: 'src/Web/Web.csproj'
-        arguments: >
-          --configuration $(BUILD_CONFIGURATION)
-          --runtime linux-x64
-          --self-contained true
-          --output $(Build.ArtifactStagingDirectory)
+        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(Build.ArtifactStagingDirectory)'
         
     # Publish build artifact
     - task: PublishBuildArtifacts@1
