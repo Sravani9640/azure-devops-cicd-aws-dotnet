@@ -88,3 +88,35 @@ stages:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)'
         ArtifactName: 'drop'
         publishLocation: 'Container'
+
+- stage: CD
+  displayName: "Continuous Deployment"
+  dependsOn: CI
+  condition: succeeded()
+
+  jobs:
+
+  - deployment: DeployToEC2
+    displayName: "Deploy to AWS EC2"
+
+    environment: Production
+
+    pool:
+      name: Default
+
+    strategy:
+      runOnce:
+        deploy:
+
+          steps:
+
+          - checkout: none
+
+          - download: current
+            artifact: drop
+
+          - script: |
+              echo Deployment Stage Started
+              echo Artifact Downloaded Successfully
+              dir $(Pipeline.Workspace)
+            displayName: "Verify Artifact"
