@@ -178,7 +178,8 @@ stages:
                sleep 10
 
                echo "Running Health Check..."
-               curl http://localhost:5000
+               curl -sSf http://localhost:5000 > /dev/null
+               echo "Health Check Passed."
 
                echo "======================================"
                echo "Deployment Successful"
