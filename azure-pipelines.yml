@@ -129,3 +129,25 @@ stages:
              targetFolder: '/home/ec2-user/deploy'
              cleanTargetFolder: true
              overwrite: true
+
+          - task: SSH@0
+            displayName: "Deploy Application"
+            inputs:
+             sshEndpoint: 'AWS-EC2'
+             runOptions: 'inline'
+             inline: |
+             echo "Installing unzip..."
+             sudo dnf install unzip -y
+
+             echo "Creating application directory..."
+              sudo mkdir -p /opt/cleanarchitecture
+
+             echo "Cleaning previous deployment..."
+                sudo rm -rf /opt/cleanarchitecture/*
+
+             echo "Extracting Web.zip..."
+              sudo unzip -o /home/ec2-user/deploy/Web.zip -d /opt/cleanarchitecture
+
+              echo "Deployment completed."
+
+              ls -la /opt/cleanarchitecture
