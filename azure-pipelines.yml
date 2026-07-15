@@ -11,7 +11,7 @@ stages:
 
   jobs:
   - job: BuildAndTest
-    displayName: "Build, Test and Publish"
+    displayName: "Build, Test and Publish Application"
 
     pool:
       name: Default
@@ -53,14 +53,14 @@ stages:
       displayName: "Restore Packages"
       inputs:
         command: restore
-        projects: '**/*.slnx'
+        projects: 'CleanArchitecture.slnx'
 
     # Build solution
     - task: DotNetCoreCLI@2
       displayName: "Build Solution"
       inputs:
         command: build
-        projects: '**/*.slnx'
+        projects: 'CleanArchitecture.slnx'
         arguments: '--configuration $(BUILD_CONFIGURATION) --no-restore'
 
     # Run tests
@@ -71,6 +71,7 @@ stages:
         projects: 'tests/Application.UnitTests/Application.UnitTests.csproj'
         publishTestResults: true
         arguments: '--configuration $(BUILD_CONFIGURATION)'
+
 
     # Publish application
     - task: DotNetCoreCLI@2
@@ -136,18 +137,49 @@ stages:
              sshEndpoint: 'AWS-EC2'
              runOptions: 'inline'
              inline: |
+               set -e
+               echo "======================================"
+               echo "Starting Deployment"
+               echo "======================================"
+
                echo "Installing unzip..."
                sudo dnf install unzip -y
 
-               echo "Creating application directory..."
+               echo "Creating deployment directory..."
                sudo mkdir -p /opt/cleanarchitecture
 
-               echo "Cleaning previous deployment..."
+               echo "Stopping application service..."
+               sudo systemctl stop cleanarchitecture || true
+
+               echo "Creating backup..."
+
+               sudo mkdir -p /opt/backup
+
+               if [ -d "/opt/cleanarchitecture" ]; then
+               sudo cp -r /opt/cleanarchitecture /opt/backup/cleanarchitecture_$(date +%Y%m%d_%H%M%S)
+               fi
+
+               echo "Cleaning old deployment..."
                sudo rm -rf /opt/cleanarchitecture/*
 
-               echo "Extracting Web.zip..."
+               echo "Extracting application..."
                sudo unzip -o /home/ec2-user/deploy/Web.zip -d /opt/cleanarchitecture
 
-               echo "Deployment completed."
+               echo "Setting ownership..."
+               sudo chown -R ec2-user:ec2-user /opt/cleanarchitecture
 
-               ls -la /opt/cleanarchitecture
+               echo "Starting application service..."
+               sudo systemctl start cleanarchitecture
+
+               echo "Checking service status..."
+               sudo systemctl status cleanarchitecture --no-pager
+
+               echo "Waiting for application..."
+               sleep 10
+
+               echo "Running Health Check..."
+               curl http://localhost:5000
+
+               echo "======================================"
+               echo "Deployment Successful"
+               echo "======================================"
