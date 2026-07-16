@@ -1,0 +1,1174 @@
+# 9. Azure DevOps Pipeline
+
+The CI/CD process is implemented using Azure DevOps YAML Pipelines.
+
+The pipeline consists of two stages:
+
+1. Continuous Integration (CI)
+2. Continuous Deployment (CD)
+
+The pipeline is automatically triggered whenever code is pushed to the **main** branch.
+
+```yaml
+trigger:
+- main
+```
+
+This enables automatic build and deployment without manual intervention.
+
+---
+
+# 10. Pipeline Variables
+
+The pipeline uses an Azure DevOps Variable Group.
+
+```yaml
+variables:
+- group: Production-Variables
+```
+
+## Why Variable Groups?
+
+Instead of hardcoding configuration values inside the YAML file, Azure DevOps allows common variables to be stored securely.
+
+Examples include:
+
+- .NET SDK Version
+- Build Configuration
+- Server Names
+- Environment-specific settings
+
+Benefits:
+
+- Centralized configuration
+- Easy maintenance
+- Reusable across multiple pipelines
+- Better security
+- No need to modify YAML when values change
+
+---
+
+# 11. Agent Pool
+
+The pipeline runs using a Self-Hosted Agent.
+
+```yaml
+pool:
+  name: Default
+```
+
+## Why Self-Hosted Agent?
+
+Initially, Microsoft Hosted Agents were considered, but the project required deployment to a private AWS EC2 instance using SSH.
+
+A Self-Hosted Agent provides:
+
+- Complete control over the execution environment
+- Faster builds after initial setup
+- Ability to access private infrastructure
+- Custom software installation
+- No dependency on Microsoft-hosted images
+
+The agent executes every pipeline task sequentially.
+
+---
+
+# 12. Continuous Integration Stage
+
+The Continuous Integration stage is responsible for validating the application and generating a deployment package.
+
+Pipeline Flow:
+
+```
+
+Checkout
+↓
+Install .NET SDK
+↓
+Install Node.js
+↓
+Restore Packages
+↓
+Build Solution
+↓
+Run Unit Tests
+↓
+Publish Application
+↓
+Publish Build Artifact
+
+```
+
+---
+
+# 13. Checkout Source Code
+
+```yaml
+- checkout: self
+```
+
+## Purpose
+
+Downloads the latest source code from the GitHub repository to the build agent.
+
+Without this step, the agent would have no application source code to build.
+
+Azure DevOps automatically performs:
+
+- Repository cloning
+- Branch checkout
+- Workspace creation
+
+---
+
+# 14. Install .NET SDK
+
+```yaml
+- task: UseDotNet@2
+```
+
+## Purpose
+
+Installs the required .NET SDK version on the build agent.
+
+The SDK is required for:
+
+- Restore
+- Build
+- Test
+- Publish
+
+Without the SDK, none of the .NET CLI commands would execute successfully.
+
+The version is supplied from the Variable Group.
+
+Example:
+
+```
+
+DOTNET_VERSION=10.0.x
+
+```
+
+Benefits:
+
+- Consistent builds
+- Version control
+- Easy upgrades
+
+---
+
+# 15. Install Node.js
+
+```yaml
+- task: UseNode@1
+```
+
+## Why Node.js?
+
+Although the backend is developed using .NET, the application contains an Angular frontend.
+
+Angular requires:
+
+- Node.js
+- npm
+- Angular CLI
+
+During the publish process, Angular is automatically compiled.
+
+Without Node.js, the publish step would fail because npm commands could not execute.
+
+The pipeline installs Node.js version 20.
+
+```yaml
+version: '20.x'
+```
+
+---
+
+# 16. Restore Packages
+
+```yaml
+command: restore
+```
+
+## Purpose
+
+Downloads all NuGet packages required by the solution.
+
+Examples include:
+
+- ASP.NET Core packages
+- Entity Framework Core
+- MediatR
+- FluentValidation
+- AutoMapper
+
+These packages are stored in the local NuGet cache on the build agent.
+
+Restore is executed before Build because the compiler requires all referenced libraries.
+
+---
+
+# 17. Build Solution
+
+```yaml
+command: build
+```
+
+## Purpose
+
+Compiles the complete solution.
+
+The build process performs:
+
+- Syntax validation
+- Dependency validation
+- Reference resolution
+- Compilation
+- DLL generation
+
+No deployment occurs during this stage.
+
+The output is intermediate compiled binaries.
+
+---
+
+# 18. Run Unit Tests
+
+```yaml
+command: test
+```
+
+## Purpose
+
+Executes automated unit tests before deployment.
+
+Current pipeline executes:
+
+```
+
+Application.UnitTests
+
+```
+
+The objective is to validate business logic before creating the deployment package.
+
+If any test fails:
+
+- Build fails
+- Artifact is not created
+- Deployment does not start
+
+This prevents defective code from reaching production.
+
+---
+
+# 19. Publish Application
+
+```yaml
+command: publish
+```
+
+## Purpose
+
+Creates the deployment-ready application.
+
+Unlike Build, Publish prepares everything required to run the application on another server.
+
+The publish process performs:
+
+- Build verification
+- Dependency packaging
+- Angular build
+- Static file generation
+- Runtime file generation
+- Publish folder creation
+
+---
+
+## Angular Build Process
+
+One interesting aspect of this project is that the Angular application is **not built using separate pipeline tasks**.
+
+Instead, Angular is built automatically during the .NET publish process.
+
+The Web project contains MSBuild targets that execute Angular commands.
+
+Internally the publish process performs:
+
+```
+
+dotnet publish
+↓
+npm install
+↓
+Generate Angular API Client
+↓
+ng build
+↓
+Copy Angular files into wwwroot
+↓
+Create publish output
+
+```
+
+This is why installing Node.js is mandatory even though there are no explicit Angular build tasks in the YAML pipeline.
+
+---
+
+# 20. Publish Build Artifact
+
+```yaml
+PublishBuildArtifacts@1
+```
+
+## Purpose
+
+Stores the published application as an Azure DevOps Artifact.
+
+Artifact Name:
+
+```
+
+drop
+
+```
+
+The artifact contains:
+
+- Published DLLs
+- Configuration files
+- Angular frontend
+- Static files
+- Runtime dependencies
+- Web.zip
+
+---
+
+## Why Artifacts?
+
+Artifacts separate the Build process from Deployment.
+
+Instead of rebuilding the application during deployment, the exact same artifact produced by the CI stage is deployed.
+
+Advantages include:
+
+- Consistency
+- Faster deployments
+- Traceability
+- Rollback capability
+- Reusability
+
+This approach follows standard DevOps best practices.
+
+---
+
+# CI Stage Summary
+
+At the completion of the Continuous Integration stage, Azure DevOps has successfully:
+
+- Downloaded the source code
+- Installed all required tools
+- Restored project dependencies
+- Built the application
+- Executed unit tests
+- Published the application
+- Generated a deployment artifact
+
+No changes are made to the production server during this stage.
+
+The output of the CI stage is a validated deployment package that is ready for release in the Continuous Deployment stage.
+
+
+
+# 21. Continuous Deployment Stage
+
+The Continuous Deployment (CD) stage is responsible for deploying the application built during the Continuous Integration stage to an AWS EC2 instance.
+
+Unlike the CI stage, which validates and packages the application, the CD stage focuses on releasing the application to the target environment.
+
+The deployment process is fully automated and is executed only after the CI stage completes successfully.
+
+Pipeline Flow:
+
+```
+
+Download Artifact
+
+↓
+
+Verify Artifact
+
+↓
+
+Copy Artifact to AWS EC2
+
+↓
+
+Connect to EC2 using SSH
+
+↓
+
+Stop Running Application
+
+↓
+
+Create Backup
+
+↓
+
+Clean Previous Deployment
+
+↓
+
+Extract Latest Build
+
+↓
+
+Set File Ownership
+
+↓
+
+Start Application
+
+↓
+
+Verify Service
+
+↓
+
+Health Check
+
+↓
+
+Deployment Successful
+
+```
+
+---
+
+# 22. Deployment Job
+
+The deployment stage uses an Azure DevOps Deployment Job.
+
+```yaml
+deployment: DeployToEC2
+```
+
+Deployment jobs provide additional deployment tracking and are associated with Azure DevOps Environments.
+
+Benefits include:
+
+- Deployment history
+- Environment tracking
+- Approval support
+- Audit logs
+- Deployment visualization
+
+---
+
+# 23. Azure DevOps Environment
+
+The deployment targets the following environment:
+
+```yaml
+environment: Production
+```
+
+Environments provide logical separation between deployment targets.
+
+Typical enterprise environments include:
+
+- Development
+- Testing
+- UAT
+- Production
+
+For this project, the application is deployed directly to the Production environment.
+
+---
+
+# 24. Download Build Artifact
+
+```yaml
+- download: current
+  artifact: drop
+```
+
+## Purpose
+
+The CI stage generated an artifact named **drop**.
+
+The CD stage downloads this artifact before deployment.
+
+The downloaded artifact contains:
+
+- Published application
+- DLL files
+- Angular frontend
+- Configuration files
+- Static content
+- Web.zip
+
+This guarantees that the exact build tested during CI is deployed to the server.
+
+---
+
+# 25. Verify Artifact
+
+```yaml
+- script:
+```
+
+The deployment first verifies that the artifact has been downloaded successfully.
+
+Example:
+
+```
+Deployment Stage Started
+
+Artifact Downloaded Successfully
+```
+
+This provides confirmation before copying files to the server.
+
+---
+
+# 26. Copy Files to AWS EC2
+
+The following Azure DevOps task is used:
+
+```yaml
+CopyFilesOverSSH@0
+```
+
+## Purpose
+
+Transfers the published application from the Azure DevOps agent to the AWS EC2 instance using SSH.
+
+Source
+
+```
+$(Pipeline.Workspace)/drop
+```
+
+Destination
+
+```
+/home/ec2-user/deploy
+```
+
+Files are copied securely over an encrypted SSH connection.
+
+Advantages:
+
+- Secure transfer
+- Automatic overwrite
+- No manual SCP commands
+- Integrated with Azure DevOps
+
+---
+
+# 27. SSH Deployment
+
+After copying the files, Azure DevOps opens an SSH session on the EC2 instance.
+
+The remaining deployment steps execute directly on the Linux server.
+
+---
+
+# 28. set -e
+
+The deployment script begins with:
+
+```bash
+set -e
+```
+
+## Purpose
+
+Immediately stops the deployment if any command returns a non-zero exit code.
+
+Without this command:
+
+- Deployment may continue even after a failure.
+- Application could become partially deployed.
+- Errors might go unnoticed.
+
+Using `set -e` ensures deployment integrity.
+
+---
+
+# 29. Installing unzip
+
+```bash
+sudo dnf install unzip -y
+```
+
+## Purpose
+
+The published application is generated as a compressed ZIP file.
+
+The Linux server requires the unzip utility to extract the deployment package.
+
+The command is safe to execute multiple times because DNF installs the package only if it is not already present.
+
+---
+
+# 30. Creating Deployment Directory
+
+```bash
+sudo mkdir -p /opt/cleanarchitecture
+```
+
+## Purpose
+
+Creates the application deployment directory.
+
+The `-p` option ensures:
+
+- Directory is created if it does not exist.
+- No error occurs if it already exists.
+
+Application files are deployed here.
+
+---
+
+# 31. Stopping Existing Application
+
+```bash
+sudo systemctl stop cleanarchitecture
+```
+
+## Purpose
+
+Stops the currently running application before replacing files.
+
+This prevents:
+
+- File locking
+- Partial deployments
+- DLL replacement errors
+
+The command is followed by:
+
+```bash
+|| true
+```
+
+This allows deployment to continue even if the service was not already running.
+
+---
+
+# 32. Creating Backup
+
+The deployment creates a backup before replacing application files.
+
+Example:
+
+```
+/opt/backup/cleanarchitecture_20260715_203015
+```
+
+## Why Backups?
+
+Backups provide a rollback mechanism.
+
+If the latest deployment fails, the previous version can be restored quickly without rebuilding the application.
+
+This is a common practice in production deployments.
+
+---
+
+# 33. Cleaning Previous Deployment
+
+```bash
+sudo rm -rf /opt/cleanarchitecture/*
+```
+
+## Purpose
+
+Removes files from the previous deployment.
+
+This prevents:
+
+- Old DLLs
+- Obsolete JavaScript files
+- Stale configuration files
+- Version conflicts
+
+Deploying over existing files without cleanup can cause unexpected runtime issues.
+
+---
+
+# 34. Extracting the Application
+
+```bash
+sudo unzip -o /home/ec2-user/deploy/Web.zip -d /opt/cleanarchitecture
+```
+
+## Purpose
+
+Extracts the published application into the deployment directory.
+
+The `-o` option overwrites existing files automatically.
+
+The deployment package contains:
+
+- ASP.NET Core application
+- Angular frontend
+- Runtime files
+- Static assets
+
+---
+
+# 35. Setting File Ownership
+
+```bash
+sudo chown -R ec2-user:ec2-user /opt/cleanarchitecture
+```
+
+## Purpose
+
+Ensures that the deployed files are owned by the application user.
+
+Correct ownership prevents permission-related runtime failures.
+
+---
+
+# 36. Starting the Application
+
+```bash
+sudo systemctl start cleanarchitecture
+```
+
+## Purpose
+
+Starts the application using the Linux systemd service.
+
+Using systemd provides:
+
+- Automatic restart on failure
+- Centralized logging
+- Service monitoring
+- Automatic startup after server reboot
+
+This approach is preferred over manually running:
+
+```
+dotnet Web.dll
+```
+
+---
+
+# 37. Verifying Service Status
+
+```bash
+sudo systemctl status cleanarchitecture
+```
+
+## Purpose
+
+Confirms that the application service started successfully.
+
+Typical information displayed includes:
+
+- Service state
+- Process ID
+- Memory usage
+- CPU usage
+- Recent log entries
+
+This provides immediate deployment feedback.
+
+---
+
+# 38. Waiting Before Validation
+
+```bash
+sleep 10
+```
+
+## Purpose
+
+Provides the application with sufficient time to start before performing the health check.
+
+Without a delay, the health check may execute before the application has finished initializing.
+
+---
+
+# 39. Health Check
+
+The deployment validates the application using:
+
+```bash
+curl -sSf http://localhost:5000 > /dev/null
+```
+
+## Purpose
+
+Confirms that the application is responding successfully.
+
+The deployment is considered successful only if the application returns an HTTP success response.
+
+If the health check fails:
+
+- Pipeline fails
+- Deployment is reported as unsuccessful
+- The issue can be investigated before users access the application
+
+Health checks are a critical component of production deployment pipelines.
+
+---
+
+# 40. Continuous Deployment Summary
+
+At the completion of the CD stage, Azure DevOps has successfully:
+
+- Downloaded the deployment artifact
+- Copied files securely to AWS EC2
+- Connected to the Linux server using SSH
+- Stopped the running application
+- Created a deployment backup
+- Removed the previous deployment
+- Extracted the latest application
+- Updated file ownership
+- Started the application service
+- Verified service health
+
+The deployment is now complete, and the latest version of the application is available to users.
+
+---
+
+# 41. Complete CI/CD Workflow
+
+The overall deployment lifecycle can be summarized as follows:
+
+```
+Developer
+      │
+      ▼
+Git Push
+      │
+      ▼
+GitHub Repository
+      │
+      ▼
+Azure DevOps Pipeline
+      │
+      ├─────────────── CI ───────────────┐
+      │                                  │
+      ▼                                  ▼
+Checkout → Restore → Build → Test → Publish → Artifact
+                                           │
+                                           ▼
+                               Continuous Deployment
+                                           │
+                                           ▼
+                             Download Artifact
+                                           │
+                                           ▼
+                             Copy to AWS EC2
+                                           │
+                                           ▼
+                              Stop Application
+                                           │
+                                           ▼
+                                Create Backup
+                                           │
+                                           ▼
+                               Deploy New Build
+                                           │
+                                           ▼
+                             Start systemd Service
+                                           │
+                                           ▼
+                                 Health Check
+                                           │
+                                           ▼
+                               Deployment Complete
+```
+
+This workflow provides a fully automated, repeatable, and reliable software delivery process, reducing manual effort and minimizing deployment risks.
+
+# 42. Best Practices Implemented
+
+This project follows several DevOps and software engineering best practices to ensure the deployment process is reliable, repeatable, and maintainable.
+
+## Source Code Management
+
+- Source code is maintained in GitHub.
+- The pipeline is automatically triggered when changes are pushed to the **main** branch.
+- Infrastructure configuration is stored as code using Azure DevOps YAML.
+
+---
+
+## Build Automation
+
+The application is automatically built using Azure DevOps without requiring manual intervention.
+
+The build process includes:
+
+- Source code checkout
+- Dependency restoration
+- Solution compilation
+- Unit testing
+- Application publishing
+
+Automating these tasks ensures every build is created using the same process.
+
+---
+
+## Automated Testing
+
+Unit tests are executed before deployment.
+
+Benefits include:
+
+- Early defect detection
+- Improved application quality
+- Reduced production failures
+- Increased confidence during deployments
+
+Deployments proceed only if all tests complete successfully.
+
+---
+
+## Artifact-Based Deployment
+
+Instead of deploying directly from source code, the pipeline creates a deployment artifact.
+
+Advantages include:
+
+- Same artifact is used across environments
+- Faster deployments
+- Build once, deploy many times
+- Easy rollback
+- Improved traceability
+
+---
+
+## Automated Deployment
+
+Deployment to AWS EC2 is fully automated.
+
+The deployment process includes:
+
+- Artifact transfer
+- Backup creation
+- Application deployment
+- Service restart
+- Health verification
+
+This removes manual deployment activities and reduces deployment errors.
+
+---
+
+## Deployment Backup
+
+Before deploying a new version, the existing application is backed up.
+
+Benefits:
+
+- Rollback capability
+- Reduced deployment risk
+- Recovery from failed deployments
+
+---
+
+## Linux Service Management
+
+The application is managed using systemd.
+
+Advantages:
+
+- Automatic restart
+- Automatic startup after reboot
+- Centralized logging
+- Service monitoring
+- Standard Linux administration
+
+---
+
+## Health Verification
+
+A health check is executed after deployment.
+
+Only if the application responds successfully is the deployment considered successful.
+
+This prevents unhealthy deployments from being marked as completed.
+
+---
+
+## Secure Deployment
+
+Deployment is performed using Azure DevOps SSH Service Connection.
+
+Benefits:
+
+- Encrypted communication
+- No passwords stored in source code
+- Secure authentication
+- Centralized credential management
+
+---
+
+## Configuration Management
+
+Pipeline configuration values are stored in Azure DevOps Variable Groups.
+
+Advantages:
+
+- Centralized configuration
+- Easy updates
+- Reusability
+- Better security
+
+---
+
+# 43. Challenges Faced During Implementation
+
+During the implementation of this project, several practical issues were encountered.
+
+Resolving these issues provided hands-on experience with Azure DevOps, Linux administration, AWS, and CI/CD troubleshooting.
+
+Major challenges included:
+
+- Configuring a Self-Hosted Azure DevOps Agent
+- YAML syntax and indentation issues
+- Node.js availability during Angular build
+- .NET SDK and Runtime version mismatch
+- Installing the required .NET Runtime on Amazon Linux
+- Deploying artifacts using SSH
+- Configuring Linux systemd services
+- Application binding only to localhost
+- Port accessibility issues
+- EC2 Security Group configuration
+- Pipeline health check failures
+- Service restart failures
+- File permission issues
+- Deployment automation
+
+Each issue was investigated, analyzed, and resolved during implementation.
+
+A detailed explanation of every issue is available in the **TROUBLESHOOTING_GUIDE.md** document.
+
+---
+
+# 44. Lessons Learned
+
+This project provided practical experience across multiple technologies.
+
+Key learning outcomes include:
+
+### Azure DevOps
+
+- YAML Pipelines
+- Variable Groups
+- Deployment Jobs
+- Artifacts
+- Service Connections
+- Self-Hosted Agents
+
+---
+
+### .NET
+
+- Build process
+- Publish process
+- Dependency restoration
+- Unit testing
+- Angular integration during publish
+
+---
+
+### AWS
+
+- EC2 provisioning
+- Amazon Linux administration
+- SSH connectivity
+- Security Groups
+- Deployment directories
+
+---
+
+### Linux
+
+- systemctl
+- systemd
+- journalctl
+- curl
+- chmod
+- chown
+- unzip
+- process management
+
+---
+
+### DevOps Concepts
+
+- Continuous Integration
+- Continuous Deployment
+- Build Automation
+- Artifact Management
+- Deployment Automation
+- Backup Strategy
+- Health Checks
+- Pipeline Troubleshooting
+
+---
+
+# 45. Future Improvements
+
+This project establishes a strong foundation for CI/CD implementation.
+
+Future enhancements may include:
+
+- Docker containerization
+- Kubernetes deployment
+- Terraform Infrastructure as Code
+- Nginx Reverse Proxy
+- HTTPS using SSL certificates
+- SonarQube code quality analysis
+- Azure Key Vault integration
+- Deployment approval gates
+- Blue-Green Deployment
+- Rolling Deployment
+- Application monitoring
+- Log aggregation
+- Automated rollback
+- Infrastructure monitoring
+- Notification integration using Microsoft Teams or Slack
+
+---
+
+# 46. Conclusion
+
+This project demonstrates the implementation of a complete end-to-end CI/CD pipeline using Azure DevOps and AWS EC2 for a .NET 10 Clean Architecture application.
+
+The solution automates the entire software delivery lifecycle, beginning with source code committed to GitHub and ending with a verified deployment on an AWS EC2 instance.
+
+The pipeline performs source code checkout, dependency restoration, application build, unit testing, application publishing, artifact generation, secure artifact transfer, automated deployment, Linux service management, backup creation, and application health verification.
+
+Throughout the implementation, multiple real-world deployment challenges were encountered and resolved, providing practical experience in Azure DevOps, Linux administration, AWS infrastructure, and deployment troubleshooting.
+
+This project demonstrates practical knowledge of modern DevOps practices including CI/CD automation, artifact management, deployment automation, secure server access, service orchestration, and health validation.
+
+The implementation reflects the type of deployment workflow commonly used for enterprise applications and provides a solid foundation for future enhancements such as containerization, Kubernetes orchestration, Infrastructure as Code, and advanced deployment strategies.
+
+---
+
+# Document Version
+
+| Item | Value |
+|------|-------|
+| Project | Clean Architecture CI/CD using Azure DevOps and AWS EC2 |
+| Framework | .NET 10 |
+| Frontend | Angular |
+| Cloud Platform | AWS EC2 |
+| Operating System | Amazon Linux 2023 |
+| CI/CD Platform | Azure DevOps |
+| Version | 1.0 |
+| Author | Sravani Punnam |
+
